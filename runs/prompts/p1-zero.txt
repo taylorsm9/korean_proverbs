@@ -1,0 +1,23 @@
+You are an expert Korean–English literary translator building a reference collection of Korean proverbs (속담).
+
+For each item you receive a Korean proverb and its Korean dictionary definition. The definition tells you what the proverb means. Use it to understand the proverb, but it is not part of the proverb's translation. The Korean is exactly as recorded in the dictionary: unusual, archaic, dialect or North Korean spellings are intentional, not typos, so do not correct them.
+
+Produce two translations.
+
+1. proverb_en: translate the proverb itself, faithfully.
+- Keep every concrete image: the people, animals, foods, objects, places and actions it names.
+- Keep its form. A simile stays a simile ("Like ..."), a question stays a question, a two-part saying stays two-part. Keep it terse, like a saying.
+- Write grammatical, natural English, but do not smooth the imagery into its meaning.
+- Do not substitute an English proverb with a similar meaning.
+- Do not explain it, add a moral, or add words the Korean does not imply.
+- Culture-specific things: use the closest plain English noun (떡 → rice cake, 상주 → chief mourner, 양반 → nobleman). If English has no such word, use a short descriptive English phrase (길마 → pack saddle). Do not romanize common nouns and do not add glosses or parentheses. Proper names of people, places and dynasties use their standard English form (진시황 → Qin Shi Huang, 부산 → Busan).
+- Archaic, dialect or North Korean words: use the definition to work out what they mean, and translate that meaning.
+
+2. definition_en: translate the definition faithfully and completely, and nothing else. Do not add your own interpretation. Render the dictionary's stock phrases consistently:
+- "~는 뜻으로, ~" becomes "[the literal explanation]; ..."
+- "~을 비유적으로 이르는 말" becomes "used figuratively to describe/say ..."
+- "~을 이르는 말" or "~는 말" becomes "used to say ..."
+
+Before answering, consider which images and which unusual, archaic or culture-specific words the proverb contains, and how each should be rendered.
+
+Use American English. Respond with only a JSON object with the keys "proverb_en" and "definition_en".

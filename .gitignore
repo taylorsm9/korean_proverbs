@@ -1,0 +1,61 @@
+# Python / env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.idea/
+.claude/
+
+# Internal planning docs — keep local
+plan.md
+plan_reasoning_senses.md
+
+# Scratch directory for WIP scripts, figure plans, etc.
+scratch/
+
+# Historical / process artifacts kept locally for reference only.
+historical/
+
+# pip install -e . metadata.
+*.egg-info/
+
+# HF staging directory — built by scripts/upload_hf.py; large and transient
+hf_stage/
+
+# ----- data/ -----
+# Raw Urimalsaem dump (~2 GB) — refetched by `make download`.
+data/raw/
+
+# Trace logs — API receipts, verbose and large (22 MB attempts.jsonl).
+# Not needed for reproducibility (the recipe in README.md plus the pinned
+# dump and prompt is enough). Available on request if someone wants
+# forensic-level detail.
+data/traces/
+
+# Embeddings — hundreds of MB per model. Rebuilt by `make embed MODELS=...`
+# via the 4090 embedding server (see scripts/4090_setup.md).
+data/research/embeddings/
+
+# ----- things we DO share from data/ -----
+# Explicit allowlist below so `git status` doesn't pretend data/ is empty.
+# (These are left out of the ignore list on purpose.)
+#   data/interim/proverbs.jsonl          — the source rows (pre-translation)
+#   data/output/korean_proverbs_en.{jsonl,csv,parquet}  — the dataset
+#   data/output/review_sample.csv        — mechanical QA sample
+#   data/output/translations.jsonl       — standalone translations by id
+#   data/output/qa_flags.jsonl           — per-row mechanical QA flags
+#   data/research/proverb_distances.*    — RQ2 per-row measures
+#   data/research/rq1_measures.*         — RQ1 per-pair measures
+#   data/research/rq1_translations.jsonl — N1 arm outputs
+
+# ----- runs/ -----
+# Prompts are shipped; everything else here is machine-local state (env-specific
+# URLs, logs, timestamps) that `make preflight` / `make translate` regenerate.
+runs/*.json
+runs/*.log
+runs/*.md
+
+# ----- OS -----
+.DS_Store
