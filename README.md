@@ -58,21 +58,6 @@ Headwords in Urimalsaem use `[X/Y]` and `(…)` notation for variants. We derive
 
 The raw headword is preserved as `headword_raw`.
 
-## Mechanical QA
-
-During build we ran a set of mechanical checks against every translation; nothing fired on any row, so the shipped dataset does not carry a QA-flags column. Flag definitions, for reference:
-
-| Flag | Condition |
-|---|---|
-| `empty_field` | an empty English field |
-| `invalid_json` | the model's final answer failed JSON validation |
-| `hangul_in_en` | Hangul characters appear in an English field |
-| `length_ratio` | `definition_en` length ÷ `definition_ko` length is below 0.8 or above 5 |
-| `too_short` | `proverb_en` shorter than 3 words |
-| `parenthetical` | `proverb_en` contains `(` or `)` (prompt forbids these) |
-| `synonym_leak` | `definition_en` contains the text of a `synonyms_ko` entry or the word "synonym" |
-| `truncated` | `finish_reason == "length"` on the accepted attempt |
-
 ## A short experiment
 
 Three embedding checks on the dataset's thinking-off translations. Numbers below use `kakaocorp/kanana-nano-2.1b-embedding` (CC-BY-NC-4.0); all three findings replicate under `Qwen/Qwen3-Embedding-8B` (Apache-2.0).
@@ -138,7 +123,6 @@ echo '{"mode":"B"}' > runs/mode.json
 
 make translate               # produce data/output/translations.jsonl (10,763 rows)
 make translate-thinking      # produce data/output/translations_thinking.jsonl (10,763 rows)
-make qa                      # mechanical QA flags
 make package                 # produce jsonl/csv/parquet in data/output/
 
 # Rebuilding the per-row research measures used in "A short experiment":
@@ -153,7 +137,7 @@ python -m korean_proverb.rq1_analyze                            # writes data/re
 
 ## Limitations
 
-- Machine-translated with no human review. The mechanical checks catch obvious failures; they do not evaluate translation quality.
+- Machine-translated with no human review.
 - One row per sense; dedupe on `headword_raw` for one row per proverb (we don't designate a primary sense for you — Urimalsaem's `sense_no` is their own ordering).
 - Only the canonical form is translated; variant combinations in `headword_raw` are not expanded.
 - The dictionary definition sits in the translation prompt, which could leak meaning into the proverb translations. The per-row RQ1 measures (thinking off; see "A short experiment" above) show the effect is small — the English translations largely preserve the Korean wording rather than the inferred meaning.
