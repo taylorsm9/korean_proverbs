@@ -38,6 +38,11 @@ data/traces/
 # via the 4090 embedding server (see scripts/4090_setup.md).
 data/research/embeddings/
 
+# Thinking research run outputs: only the per-row measures are shared.
+# The 300-row sample is redrawn deterministically by thinking_research.
+data/research/thinking_*.jsonl
+data/research/thinking_sample_ids.json
+
 # The packaged dataset — published on Hugging Face (NLPatVCU/korean_proverb)
 # and rebuilt locally by `make package`. Too large for GitHub once the
 # reasoning traces are included.
@@ -49,6 +54,7 @@ data/output/
 #   data/interim/proverbs.jsonl          — the source rows (pre-translation)
 #   data/research/proverb_distances.*    — RQ2 per-row measures
 #   data/research/rq1_measures.*         — RQ1 per-pair measures
+#   data/research/thinking_measures.*    — thinking-on vs off per-proverb measures
 #   data/research/rq1_translations.jsonl — N1 arm outputs
 
 # ----- runs/ -----
