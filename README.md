@@ -2,18 +2,15 @@
 
 A dataset of every proverb (속담) in the Urimalsaem dictionary (우리말샘, National Institute of Korean Language), machine-translated to English with the Korean dictionary definition as context. Built 2026-10-14.
 
-Available on Hugging Face: <https://huggingface.co/datasets/NLPatVCU/korean_proverb> (dataset + companion embeddings; the embeddings are not shipped here on GitHub).
+Available on Hugging Face: <https://huggingface.co/datasets/NLPatVCU/korean_proverb> (dataset + companion embeddings; neither is shipped here on GitHub).
 
 ## Dataset at a glance
 
 - **10,763 rows**, one per (proverb, sense) pair in Urimalsaem
 - Covers **9,612 unique proverbs** (group by `headword_raw` for one row per proverb)
-- Each row has: Korean proverb, one Korean dictionary definition, English translation of both
+- Each row has: Korean proverb, one Korean dictionary definition, English translations of both (thinking off and thinking on), and the model's reasoning for the thinking-on translations
 
-**Files (in `data/output/`):**
-- `korean_proverbs_en.parquet`: primary artifact, columnar
-- `korean_proverbs_en.csv`: same data for spreadsheet-oriented workflows
-- `korean_proverbs_en.jsonl`: same data, one JSON per line
+**Files:** `data/korean_proverbs_en.parquet` on Hugging Face. `make package` builds it locally in `data/output/`, along with CSV and JSONL copies.
 
 ## Columns
 
@@ -26,7 +23,11 @@ Available on Hugging Face: <https://huggingface.co/datasets/NLPatVCU/korean_prov
 | `type` | Urimalsaem's usage-category label for this sense (`일반어` is the standard-usage code; see Urimalsaem for the other codes) |
 | `definition_ko` | Dictionary definition, with `<동의 속담>`/`<동의 관용구>` tag and following synonym list stripped |
 | `synonyms_ko` | The stripped synonym list |
-| `proverb_en`, `definition_en` | English translations |
+| `proverb_en_nonthinking` | English translation of the proverb, thinking off |
+| `definition_en_nonthinking` | English translation of the definition, thinking off |
+| `proverb_en_thinking` | English translation of the proverb, thinking on |
+| `definition_en_thinking` | English translation of the definition, thinking on |
+| `reasoning` | The model's reasoning for the thinking-on translations |
 
 ## Source
 
@@ -40,9 +41,10 @@ CC BY-SA 2.0 KR, inherited from the source. Translations are derived data and ca
 ## Model
 
 - Translator: `nvidia/Qwen3.5-122B-A10B-NVFP4`, served by vLLM 0.28.0 on an NVIDIA DGX Spark.
-- Thinking: off for every request (`enable_thinking: false`).
+- Every row was translated twice with the same prompt: once with thinking off (`*_nonthinking` columns) and once with thinking on (`*_thinking` columns).
 - Prompt: `p1-zero` (see `runs/prompts/p1-zero.txt`), zero-shot, identical for every row.
-- Sampling: `temperature=0.7, top_p=0.8, top_k=20, min_p=0, presence_penalty=0, repetition_penalty=1.0, max_tokens=1024`.
+- Sampling with thinking off (`enable_thinking: false`): `temperature=0.7, top_p=0.8, top_k=20, min_p=0, presence_penalty=0, repetition_penalty=1.0, max_tokens=1024`.
+- Sampling with thinking on (`enable_thinking: true`): `temperature=1.0, top_p=0.95, top_k=20, min_p=0, presence_penalty=1.5, repetition_penalty=1.0, max_tokens=20480, thinking_token_budget=16384`.
 - Seed: `int(id)`, reproducible per row.
 - Output format: Pydantic model → JSON schema via `response_format` on `chat/completions`.
 
@@ -73,7 +75,7 @@ During build we ran a set of mechanical checks against every translation; nothin
 
 ## A short experiment
 
-Three embedding checks on the dataset. Numbers below use `kakaocorp/kanana-nano-2.1b-embedding` (CC-BY-NC-4.0); all three findings replicate under `Qwen/Qwen3-Embedding-8B` (Apache-2.0).
+Three embedding checks on the dataset's thinking-off translations. Numbers below use `kakaocorp/kanana-nano-2.1b-embedding` (CC-BY-NC-4.0); all three findings replicate under `Qwen/Qwen3-Embedding-8B` (Apache-2.0).
 
 Both encoders embed the proverb and the definition with the same query prompt, so the Korean and English sides live in the same embedding space and are directly comparable. For Qwen3 the custom instruction is `"Instruct: Given a Korean or English text, retrieve texts with the same meaning\nQuery: "`. Embeddings themselves are shipped separately [on Hugging Face](https://huggingface.co/datasets/NLPatVCU/korean_proverb); `make embed MODELS="kanana qwen3"` regenerates them against the shipped translations.
 
@@ -135,6 +137,7 @@ make preflight               # confirm the vLLM endpoint
 echo '{"mode":"B"}' > runs/mode.json
 
 make translate               # produce data/output/translations.jsonl (10,763 rows)
+make translate-thinking      # produce data/output/translations_thinking.jsonl (10,763 rows)
 make qa                      # mechanical QA flags
 make package                 # produce jsonl/csv/parquet in data/output/
 
@@ -142,6 +145,7 @@ make package                 # produce jsonl/csv/parquet in data/output/
 make install-research
 export EMBED_BASE_URL=http://<your-gpu-host>:8800   # see scripts/4090_setup.md
 make embed MODELS="kanana qwen3"
+python -m korean_proverb.embed --models kanana qwen3 --fields proverb_en_thinking definition_en_thinking
 make rq2                     # writes data/research/proverb_distances.*
 python -m korean_proverb.rq1 arms --arms N1 --concurrency 16   # N1 arm (Spark pass)
 python -m korean_proverb.rq1_analyze                            # writes data/research/rq1_measures.*
@@ -152,4 +156,4 @@ python -m korean_proverb.rq1_analyze                            # writes data/re
 - Machine-translated with no human review. The mechanical checks catch obvious failures; they do not evaluate translation quality.
 - One row per sense; dedupe on `headword_raw` for one row per proverb (we don't designate a primary sense for you — Urimalsaem's `sense_no` is their own ordering).
 - Only the canonical form is translated; variant combinations in `headword_raw` are not expanded.
-- The dictionary definition sits in the translation prompt, which could leak meaning into `proverb_en`. The per-row RQ1 measures (see "A short experiment" above) show the effect is small — the English translations largely preserve the Korean wording rather than the inferred meaning.
+- The dictionary definition sits in the translation prompt, which could leak meaning into the proverb translations. The per-row RQ1 measures (thinking off; see "A short experiment" above) show the effect is small — the English translations largely preserve the Korean wording rather than the inferred meaning.
