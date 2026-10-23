@@ -21,6 +21,7 @@ FIGURES = RUNS / "research" / "figures"
 
 PROVERBS_JSONL = INTERIM / "proverbs.jsonl"
 TRANSLATIONS_JSONL = OUTPUT / "translations.jsonl"
+TRANSLATIONS_THINKING_JSONL = OUTPUT / "translations_thinking.jsonl"
 ATTEMPTS_JSONL = TRACES / "attempts.jsonl"
 JUDGE_ATTEMPTS_JSONL = TRACES / "judge_attempts.jsonl"
 

@@ -1,7 +1,7 @@
 PY := .venv/bin/python
 PIP := .venv/bin/pip
 
-.PHONY: install install-research test download extract preflight translate qa package embed rq1 rq2 all
+.PHONY: install install-research test download extract preflight translate translate-thinking probe-thinking qa package embed rq1 rq2 all
 
 install:
 	$(PIP) install -e .[test]
@@ -23,6 +23,12 @@ preflight:
 
 translate:
 	$(PY) -m korean_proverb.translate
+
+probe-thinking:
+	$(PY) -m korean_proverb.probe_thinking
+
+translate-thinking:
+	$(PY) -m korean_proverb.translate_thinking
 
 qa:
 	$(PY) -m korean_proverb.qa

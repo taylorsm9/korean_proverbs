@@ -23,7 +23,7 @@ import httpx
 
 from . import config
 from .client import extract_reasoning, reasoning_tokens, sync_client
-from .sampling import chat_kwargs
+from .sampling import chat_kwargs, default_timeout
 from .schema import ProverbTranslation, response_format
 
 TRANSLATION_MODEL = config.TRANSLATION_MODEL
@@ -97,7 +97,7 @@ def _make_request(client, thinking: bool, user_msg: str, system_prompt: str) -> 
             {"role": "user", "content": user_msg},
         ],
         response_format=rf,
-        timeout=600 if thinking else 120,
+        timeout=default_timeout(thinking),
         **req_params,
     )
     return resp, req_params
@@ -155,7 +155,7 @@ def run_preflight() -> int:
                     {"role": "user", "content": user_msg},
                 ],
                 response_format=rf,
-                timeout=600,
+                timeout=default_timeout(True),
                 temperature=kw["temperature"],
                 top_p=kw["top_p"],
                 presence_penalty=kw["presence_penalty"],
@@ -177,7 +177,7 @@ def run_preflight() -> int:
 
     content_valid_json = False
     try:
-        ProverbTranslation.model_validate_json(content_on)
+        ProverbTranslation.model_validate_json(content_on.strip())
         content_valid_json = True
     except Exception as e:
         parse_err = str(e)
@@ -220,7 +220,7 @@ def run_preflight() -> int:
         content_off = msg_off.content or ""
         content_off_valid = False
         try:
-            ProverbTranslation.model_validate_json(content_off)
+            ProverbTranslation.model_validate_json(content_off.strip())
             content_off_valid = True
         except Exception:
             pass

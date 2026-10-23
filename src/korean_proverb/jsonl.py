@@ -9,12 +9,20 @@ from typing import Any, Iterable, Iterator
 def read_jsonl(path: Path) -> Iterator[dict]:
     if not path.exists():
         return
+    import sys
     with path.open("r", encoding="utf-8") as f:
-        for line in f:
+        for lineno, line in enumerate(f, 1):
             line = line.strip()
             if not line:
                 continue
-            yield json.loads(line)
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError as e:
+                # Tolerate a torn final line (e.g. power loss mid-append)
+                # so resume can proceed. Log once per file to stderr.
+                print(f"[read_jsonl] skipping malformed line {lineno} in {path}: {e}",
+                      file=sys.stderr)
+                continue
 
 
 def append_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:

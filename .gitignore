@@ -10,7 +10,7 @@ __pycache__/
 
 # Internal planning docs — keep local
 plan.md
-plan_reasoning_senses.md
+plan_*.md
 
 # Scratch directory for WIP scripts, figure plans, etc.
 scratch/
@@ -54,6 +54,7 @@ data/research/embeddings/
 # Prompts are shipped; everything else here is machine-local state (env-specific
 # URLs, logs, timestamps) that `make preflight` / `make translate` regenerate.
 runs/*.json
+runs/*.jsonl
 runs/*.log
 runs/*.md
 

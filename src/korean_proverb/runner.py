@@ -6,17 +6,93 @@ record. Retries and acceptance are driven by `translate_row_with_retry`.
 from __future__ import annotations
 
 import asyncio
+import sys
 import time
 from dataclasses import dataclass
 from typing import Any
 
-from openai import AsyncOpenAI, APITimeoutError, APIError
+from openai import AsyncOpenAI, APITimeoutError, APIError, APIStatusError, APIConnectionError
 
 from . import config
 from .attempts import build_attempt_record, new_attempt_id
 from .prompts import load as load_prompt, user_message_translate, user_message_nodef
 from .sampling import chat_kwargs, retry_kwargs, default_timeout
 from .schema import ProverbOnly, ProverbTranslation, response_format
+
+
+class FatalModelError(RuntimeError):
+    """Raised when the server returns 404 for the configured model name.
+
+    The two Sparks share port 8000 behind nginx; if the model running there
+    changed (e.g. operator swapped weights), every request will 404. We stop
+    the batch immediately rather than burning rows.
+    """
+
+
+_HTTP_RETRY = {502, 503, 504}
+_HTTP_FATAL = {404}
+
+
+# Module-level event so a 404 anywhere in a batch short-circuits pending work.
+_fatal_event: asyncio.Event | None = None
+
+
+def _get_fatal_event() -> asyncio.Event:
+    global _fatal_event
+    if _fatal_event is None:
+        _fatal_event = asyncio.Event()
+    return _fatal_event
+
+
+def reset_fatal_event() -> None:
+    """Clear the fatal flag. Call before starting a new batch."""
+    global _fatal_event
+    _fatal_event = asyncio.Event()
+
+
+async def _create_with_retry(
+    client: AsyncOpenAI,
+    *,
+    max_attempts: int = 3,
+    base_delay: float = 2.0,
+    **create_kwargs: Any,
+) -> Any:
+    """Call chat.completions.create with HTTP retry.
+
+    - 404 ("model not found"): raises FatalModelError, sets the batch-wide
+      fatal event. The caller must stop the run.
+    - 502/503/504, APIConnectionError, APITimeoutError: exponential backoff
+      up to `max_attempts` attempts total.
+    - Other errors propagate.
+    """
+    event = _get_fatal_event()
+    last_exc: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        if event.is_set():
+            raise FatalModelError("batch aborted: prior fatal error")
+        try:
+            return await client.chat.completions.create(**create_kwargs)
+        except APIStatusError as e:
+            status = getattr(e, "status_code", None)
+            if status in _HTTP_FATAL:
+                event.set()
+                raise FatalModelError(
+                    f"model not found (HTTP {status}); check server config"
+                ) from e
+            if status in _HTTP_RETRY and attempt < max_attempts:
+                last_exc = e
+                await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
+                continue
+            raise
+        except (APITimeoutError, APIConnectionError) as e:
+            if attempt < max_attempts:
+                last_exc = e
+                await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
+                continue
+            raise
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("unreachable")
 
 
 @dataclass
@@ -69,7 +145,8 @@ async def one_attempt(
 
     params = _request_params(thinking, seed, retry, with_definition, budget_accepted=budget_accepted)
     started = time.time()
-    resp = await client.chat.completions.create(
+    resp = await _create_with_retry(
+        client,
         model=config.TRANSLATION_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -121,11 +198,24 @@ async def gather_bounded(
     By default, exceptions are returned in-place rather than cancelling the
     whole batch — critical when the server is slow and some requests may
     time out. Callers must check each result for Exception.
+
+    If any worker raises FatalModelError, remaining pending work is skipped
+    (its slot returns the FatalModelError without running). The caller is
+    expected to log and exit non-zero on seeing any FatalModelError.
     """
     sem = asyncio.Semaphore(concurrency)
+    event = _get_fatal_event()
 
     async def _wrap(coro):
+        if event.is_set():
+            # Still await the coroutine to let it close cleanly, but don't
+            # fire the request.
+            coro.close()
+            return FatalModelError("batch aborted: prior fatal error")
         async with sem:
+            if event.is_set():
+                coro.close()
+                return FatalModelError("batch aborted: prior fatal error")
             return await coro
 
     return await asyncio.gather(*[_wrap(t) for t in tasks], return_exceptions=return_exceptions)

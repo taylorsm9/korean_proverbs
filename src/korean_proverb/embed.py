@@ -28,6 +28,9 @@ from . import config
 from .jsonl import read_jsonl
 
 FIELDS = ("ko", "definition_ko", "proverb_en", "definition_en")
+# English fields from the thinking-on run (translations_thinking.jsonl). Not
+# in the default FIELDS; request them with `--fields`.
+THINKING_FIELDS = ("proverb_en_thinking", "definition_en_thinking")
 
 
 def embed_base_url() -> str | None:
@@ -233,7 +236,7 @@ def _field_text(field_name: str, source_row: dict, translation_row: dict | None)
         return source_row.get(field_name, "")
     if translation_row is None:
         return ""
-    return translation_row.get(field_name, "")
+    return translation_row.get(field_name.removesuffix("_thinking"), "")
 
 
 def _load_sidecar_ids(cache: Path, field_name: str) -> list[str]:
@@ -265,7 +268,8 @@ def _append_vectors(cache: Path, field_name: str, new_vecs: np.ndarray, new_ids:
 def embed_all(spec: ModelSpec, spec_key: str, batch_size: int = 16, device: str | None = None,
               fields: tuple[str, ...] = FIELDS, remote_url: str | None = None) -> None:
     """Embed each requested field for every row in proverbs.jsonl that has
-    content for that field, using translations.jsonl for English fields.
+    content for that field, using translations.jsonl for English fields and
+    translations_thinking.jsonl for THINKING_FIELDS.
 
     Partial-fill resumable: for each field we maintain a `{field}.ids.json`
     sidecar listing which row ids are already embedded; subsequent calls only
@@ -274,6 +278,8 @@ def embed_all(spec: ModelSpec, spec_key: str, batch_size: int = 16, device: str 
     """
     source = list(read_jsonl(config.PROVERBS_JSONL))
     translations = {r["id"]: r for r in read_jsonl(config.TRANSLATIONS_JSONL)}
+    thinking = ({r["id"]: r for r in read_jsonl(config.TRANSLATIONS_THINKING_JSONL)}
+                if any(f in THINKING_FIELDS for f in fields) else {})
     all_ids = [r["id"] for r in source]
     cache = _cache_dir(spec.name)
     (cache / "ids.json").write_text(json.dumps(all_ids), encoding="utf-8")
@@ -292,16 +298,17 @@ def embed_all(spec: ModelSpec, spec_key: str, batch_size: int = 16, device: str 
     did_any_work = False
     for field_name in fields:
         already = set(_load_sidecar_ids(cache, field_name))
+        tr_rows = thinking if field_name in THINKING_FIELDS else translations
         # Build (id, text) for every row that has non-empty content and hasn't been embedded yet.
         pairs: list[tuple[str, str]] = []
         for r in source:
             if r["id"] in already:
                 continue
-            text = _field_text(field_name, r, translations.get(r["id"]))
+            text = _field_text(field_name, r, tr_rows.get(r["id"]))
             if text:
                 pairs.append((r["id"], text))
         total_available = sum(1 for r in source
-                              if _field_text(field_name, r, translations.get(r["id"])))
+                              if _field_text(field_name, r, tr_rows.get(r["id"])))
         if not pairs:
             print(f"[embed] {spec.name} {field_name}: nothing new to embed "
                   f"({len(already):,}/{total_available:,} already cached, "

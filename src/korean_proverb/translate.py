@@ -17,7 +17,7 @@ from tqdm import tqdm
 from . import config
 from .client import async_client
 from .jsonl import accepted_ids, append_jsonl, read_jsonl
-from .runner import gather_bounded, one_attempt
+from .runner import FatalModelError, gather_bounded, one_attempt, reset_fatal_event
 from .schema import ProverbTranslation
 
 
@@ -82,7 +82,7 @@ async def translate_one(
 
     accepted: dict | None = None
     try:
-        ProverbTranslation.model_validate_json(r1.content)
+        ProverbTranslation.model_validate_json(r1.content.strip())
         validates = True
     except (ValidationError, ValueError, json.JSONDecodeError):
         validates = False
@@ -107,7 +107,7 @@ async def translate_one(
         )
         attempts.append(r2.record)
         try:
-            ProverbTranslation.model_validate_json(r2.content)
+            ProverbTranslation.model_validate_json(r2.content.strip())
             validates = True
         except Exception:
             validates = False
@@ -121,7 +121,7 @@ async def translate_one(
 
 def _accepted_to_output_row(row: dict, record: dict) -> dict:
     """Produce one translations.jsonl row from an accepted attempt."""
-    parsed = ProverbTranslation.model_validate_json(record["content"])
+    parsed = ProverbTranslation.model_validate_json(record["content"].strip())
     return {
         "id": row["id"],
         "proverb_en": parsed.proverb_en,
@@ -191,10 +191,17 @@ async def run_main(mode: str, concurrency: int) -> int:
                          f"rows_per_hour={rph:.0f} eta_s={remain:.0f}\n")
             log_fp.flush()
 
+    reset_fatal_event()
     tasks = [_one(r) for r in todo]
-    await gather_bounded(tasks, concurrency=concurrency)
+    results = await gather_bounded(tasks, concurrency=concurrency)
     pbar.close()
     log_fp.close()
+    fatal = [r for r in results if isinstance(r, FatalModelError)]
+    if fatal:
+        print(f"[main] FATAL: {len(fatal):,}/{len(results):,} tasks saw FatalModelError. "
+              f"Server model likely changed; check /v1/models and re-run preflight.",
+              file=sys.stderr)
+        return 2
     return 0
 
 
