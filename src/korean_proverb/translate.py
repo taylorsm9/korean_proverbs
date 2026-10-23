@@ -18,7 +18,7 @@ from . import config
 from .client import async_client
 from .jsonl import accepted_ids, append_jsonl, read_jsonl
 from .runner import FatalModelError, gather_bounded, one_attempt, reset_fatal_event
-from .schema import ProverbTranslation
+from .schema import NODEF_SCHEMAS, ProverbTranslation
 
 
 # ---------- mode / choice helpers ----------
@@ -59,12 +59,14 @@ async def translate_one(
     vllm_version: str | None,
     budget_accepted: bool,
     with_definition: bool = True,
+    nodef_prompt: str = "p1-nodef",
 ) -> tuple[dict | None, list[dict]]:
     """Translate one row with up to one retry on `length` or invalid JSON.
 
     Returns (accepted_record_or_None, attempts_logged).
     """
     attempts: list[dict] = []
+    schema_cls = ProverbTranslation if with_definition else NODEF_SCHEMAS[nodef_prompt]
 
     r1 = await one_attempt(
         client=client,
@@ -77,12 +79,13 @@ async def translate_one(
         vllm_version=vllm_version,
         budget_accepted=budget_accepted,
         with_definition=with_definition,
+        nodef_prompt=nodef_prompt,
     )
     attempts.append(r1.record)
 
     accepted: dict | None = None
     try:
-        ProverbTranslation.model_validate_json(r1.content.strip())
+        schema_cls.model_validate_json(r1.content.strip())
         validates = True
     except (ValidationError, ValueError, json.JSONDecodeError):
         validates = False
@@ -104,10 +107,11 @@ async def translate_one(
             vllm_version=vllm_version,
             budget_accepted=budget_accepted,
             with_definition=with_definition,
+            nodef_prompt=nodef_prompt,
         )
         attempts.append(r2.record)
         try:
-            ProverbTranslation.model_validate_json(r2.content.strip())
+            schema_cls.model_validate_json(r2.content.strip())
             validates = True
         except Exception:
             validates = False

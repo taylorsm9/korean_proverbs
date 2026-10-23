@@ -20,6 +20,19 @@ class ProverbOnly(BaseModel):
     proverb_en: str = Field(description="Faithful English translation of the Korean proverb.")
 
 
+class ProverbMeaning(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    proverb_en: str = Field(description="Faithful English translation of the Korean proverb.")
+    meaning_en: str = Field(description="What the proverb means, in plain English.")
+
+
+# Output schema for each no-definition prompt.
+NODEF_SCHEMAS: dict[str, type[BaseModel]] = {
+    "p1-nodef": ProverbOnly,
+    "p1-nodef-meaning": ProverbMeaning,
+}
+
+
 class JudgeRowFlags(BaseModel):
     model_config = ConfigDict(extra="forbid")
     substituted: bool

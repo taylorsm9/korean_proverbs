@@ -17,7 +17,7 @@ from . import config
 from .attempts import build_attempt_record, new_attempt_id
 from .prompts import load as load_prompt, user_message_translate, user_message_nodef
 from .sampling import chat_kwargs, retry_kwargs, default_timeout
-from .schema import ProverbOnly, ProverbTranslation, response_format
+from .schema import NODEF_SCHEMAS, ProverbTranslation, response_format
 
 
 class FatalModelError(RuntimeError):
@@ -132,6 +132,7 @@ async def one_attempt(
     vllm_version: str | None = None,
     budget_accepted: bool = True,
     with_definition: bool = True,
+    nodef_prompt: str = "p1-nodef",
 ) -> AttemptResult:
     """Fire one chat.completions.create call. The caller logs the record."""
     if with_definition:
@@ -139,9 +140,10 @@ async def one_attempt(
         user_msg = user_message_translate(row["ko"], row["definition_ko"], row["type"] == "북한어")
         rf = response_format(ProverbTranslation, "ProverbTranslation")
     else:
-        system_prompt = load_prompt("p1-nodef")
+        system_prompt = load_prompt(nodef_prompt)
         user_msg = user_message_nodef(row["ko"])
-        rf = response_format(ProverbOnly, "ProverbOnly")
+        schema_cls = NODEF_SCHEMAS[nodef_prompt]
+        rf = response_format(schema_cls, schema_cls.__name__)
 
     params = _request_params(thinking, seed, retry, with_definition, budget_accepted=budget_accepted)
     started = time.time()
@@ -159,7 +161,7 @@ async def one_attempt(
     record = build_attempt_record(
         row_id=row["id"],
         attempt_no=attempt_no,
-        prompt_version=prompt_version if with_definition else "p1-nodef",
+        prompt_version=prompt_version if with_definition else nodef_prompt,
         thinking=thinking,
         reason=reason,
         request={
